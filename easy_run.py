@@ -54,6 +54,9 @@ def initialize_api():
     try:
         with open("config.json") as config_file:
             config = json.load(config_file)
+            # backwards compatability
+            if not "ignore_time" in config.keys():
+                config["ignore_time"] = False
     except FileNotFoundError:
         print("File not Found, running Initial Configuration")
         initial_config()
@@ -80,6 +83,7 @@ def initial_config():
         config["sync_null_assignments"] = True
         config["sync_locked_assignments"] = True
         config["sync_no_due_date_assignments"] = True
+        config["ignore_time"] = False
     if defaults == False:
         custom_url = yes_no("Use default Canvas URL? (https://canvas.instructure.com)")
         if custom_url == True:
@@ -108,6 +112,8 @@ def initial_config():
             config["sync_locked_assignments"] = locked_assignments
             no_due_date_assignments = yes_no("Sync assignments with no due date?")
             config["sync_no_due_date_assignments"] = no_due_date_assignments
+            ignore_time = yes_no("Ignore assignment due time?")
+            config["ignore_time"] = ignore_time
 
         else:
             config["todoist_task_priority"] = 1
@@ -115,6 +121,7 @@ def initial_config():
             config["sync_null_assignments"] = True
             config["sync_locked_assignments"] = True
             config["sync_no_due_date_assignments"] = True
+            config["ignore_time"] = False
     config["courses"] = []
     with open("config.json", "w") as outfile:
         json.dump(config, outfile)
@@ -252,6 +259,10 @@ def transfer_assignments_to_todoist():
     for assignment in assignments:
         course_name = courses_id_name_dict[assignment["course_id"]]
         project_id = todoist_project_dict[course_name]
+        
+        # strip time if ignoring
+        if (config["ignore_time"] and assignment["due_at"] is not None):
+            assignment["due_at"] = assignment["due_at"][:10]
 
         is_added = False
         is_synced = True
@@ -351,13 +362,17 @@ def transfer_assignments_to_todoist():
 # Adds a new task from a Canvas assignment object to Todoist under the
 # project corresponding to project_id
 def add_new_task(assignment, project_id):
-    todoist_api.add_task(
-        content="[" + assignment["name"] + "](" + assignment["html_url"] + ")" + " Due",
-        project_id=project_id,
-        due_datetime=assignment["due_at"],
-        labels=config["todoist_task_labels"],
-        priority=config["todoist_task_priority"],
-    )
+    due_field = "due_date" if config["ignore_time"] else "due_datetime"
+
+    task = {
+        "content": "[" + assignment["name"] + "](" + assignment["html_url"] + ")" + " Due",
+        "project_id": project_id,
+        due_field: assignment["due_at"],
+        "labels": config["todoist_task_labels"],
+        "priority": config["todoist_task_priority"],
+    }
+
+    todoist_api.add_task(**task)
 
 
 def canvas_assignment_stats():
