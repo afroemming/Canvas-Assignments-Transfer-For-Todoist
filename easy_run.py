@@ -262,7 +262,11 @@ def transfer_assignments_to_todoist():
         
         # strip time if ignoring
         if (config["ignore_time"] and assignment["due_at"] is not None):
-            assignment["due_at"] = assignment["due_at"][:10]
+            # need to convert to localtime for correct date
+            utc_due_dt = datetime.strptime(assignment["due_at"], "%Y-%m-%dT%H:%M:%SZ")
+            lz_due_date = utc_to_local(utc_due_dt).strftime("%Y-%m-%d")
+            assignment["due_at"] = lz_due_date
+
 
         is_added = False
         is_synced = True
